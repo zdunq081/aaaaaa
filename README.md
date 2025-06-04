@@ -1,2 +1,2 @@
 # aaaaaa
-szkolenie
+szkolenie z githuba i terraform i azure
