@@ -111,7 +111,7 @@ def index():
                 const now = new Date();
                 labels.push(now.toLocaleTimeString());
                 values.push(data.value);
-                if (labels.length > 20) { labels.shift(); values.shift(); }
+                // USUWAM ograniczenie do 20 punktów - wykres pokazuje całą historię
                 if (chart) {
                     chart.data.labels = labels;
                     chart.data.datasets[0].data = values;
@@ -127,6 +127,30 @@ def index():
         }
         function buyAI() {
             fetch('/buy_ai', {method:'POST'}).then(()=>updateValue());
+        }
+        function exportSave() {
+            window.location = '/export';
+        }
+        function importSave() {
+            const input = document.createElement('input');
+            input.type = 'file';
+            input.accept = '.txt';
+            input.onchange = e => {
+                const file = e.target.files[0];
+                const formData = new FormData();
+                formData.append('file', file);
+                fetch('/import', {method:'POST', body: formData})
+                    .then(r=>r.json())
+                    .then data=>{
+                        if(data.success){
+                            updateValue();
+                            alert('Save loaded!');
+                        } else {
+                            alert('Error: ' + (data.error || 'Invalid file'));
+                        }
+                    });
+            };
+            input.click();
         }
         let fakeStocks = [
             {symbol: 'NGU', name: 'NumberGoUp Inc.', price: 1000, change: 0},
@@ -186,10 +210,14 @@ def index():
         <div class="ticker" id="ticker"></div>
         <h1>💸 Number Go Up! 💸</h1>
         <h2>Stakeholder Value: <span id="value">0</span></h2>
-        <div style="margin:20px auto;max-width:500px;">
+        <div style="margin:20px auto;max-width:900px;display:flex;justify-content:center;gap:16px;flex-wrap:nowrap;">
             <button class="upgrade-btn" id="buy_pm" onclick="buyPM()">Hire Project Manager<br>(Cost: <span id="pm_cost">15</span>)<br>+0.5 value/tick<br>Owned: <span id="pm_count">0</span></button>
             <button class="upgrade-btn" id="buy_consultant" onclick="buyConsultant()">Hire Consultant<br>(Cost: <span id="consultant_cost">100</span>)<br>+5 value/tick<br>Owned: <span id="consultant_count">0</span></button>
             <button class="upgrade-btn" id="buy_ai" onclick="buyAI()">Deploy AI Solution<br>(Cost: <span id="ai_cost">1000</span>)<br>+50 value/tick<br>Owned: <span id="ai_count">0</span></button>
+        </div>
+        <div style="margin:20px auto;max-width:900px;">
+            <button class="upgrade-btn" onclick="exportSave()">⬇️ Export Save</button>
+            <button class="upgrade-btn" onclick="importSave()">⬆️ Import Save</button>
         </div>
         <canvas id="myChart" width="600" height="250" style="background:#222;border-radius:8px;"></canvas>
         <p style="font-style:italic; color:#FEE715;">Maximize stakeholder value! Infinite growth! 🚀</p>
