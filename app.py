@@ -105,6 +105,9 @@ def index():
                 document.getElementById('buy_pm').disabled = (data.value < data.pm_cost);
                 document.getElementById('buy_consultant').disabled = (data.value < data.consultant_cost);
                 document.getElementById('buy_ai').disabled = (data.value < data.ai_cost);
+                // Calculate gain per tick
+                let gain = 1 + data.pm_count * 0.5 + data.consultant_count * 5 + data.ai_count * 50;
+                document.getElementById('ngu_gain').innerText = gain.toFixed(2);
                 const now = new Date();
                 labels.push(now.toLocaleTimeString());
                 values.push(data.value);
@@ -141,6 +144,7 @@ def index():
         }
         function renderTicker() {
             let html = '';
+            html += `<span><b>NGU</b> <span id='value'>0</span> <span class='stock-up'>+<span id='ngu_gain'>1.00</span>/tick</span></span>`;
             fakeStocks.forEach(s => {
                 let cls = s.change > 0 ? 'stock-up' : (s.change < 0 ? 'stock-down' : 'stock-neutral');
                 let sign = s.change > 0 ? '+' : '';
