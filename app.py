@@ -4,16 +4,34 @@ import time
 
 app = Flask(__name__)
 
-stakeholder_value = {'value': 0}
+stakeholder_value = {'value': 0, 'pm_count': 0, 'pm_cost': 15, 'pm_gain': 0.5}
 
 def number_go_up():
     while True:
-        stakeholder_value['value'] += 1
+        stakeholder_value['value'] += 1 + stakeholder_value['pm_count'] * stakeholder_value['pm_gain']
         time.sleep(1)
 
 # Start background thread to increment value
 t = threading.Thread(target=number_go_up, daemon=True)
 t.start()
+
+@app.route('/buy_pm', methods=['POST'])
+def buy_pm():
+    cost = stakeholder_value['pm_cost']
+    if stakeholder_value['value'] >= cost:
+        stakeholder_value['value'] -= cost
+        stakeholder_value['pm_count'] += 1
+        stakeholder_value['pm_cost'] = int(15 * (1.15 ** stakeholder_value['pm_count']))
+        return jsonify(success=True, pm_count=stakeholder_value['pm_count'], pm_cost=stakeholder_value['pm_cost'], value=stakeholder_value['value'])
+    return jsonify(success=False, pm_count=stakeholder_value['pm_count'], pm_cost=stakeholder_value['pm_cost'], value=stakeholder_value['value'])
+
+@app.route('/value')
+def value():
+    return jsonify(
+        value=round(stakeholder_value['value'],2),
+        pm_count=stakeholder_value['pm_count'],
+        pm_cost=stakeholder_value['pm_cost']
+    )
 
 @app.route('/')
 def index():
@@ -32,11 +50,17 @@ def index():
         .stock-up { color: #00ff00; }
         .stock-down { color: #ff3333; }
         .stock-neutral { color: #FEE715; }
+        .upgrade-btn {
+            background: #FEE715; color: #101820; border: none; border-radius: 6px; padding: 10px 20px; font-size: 1.1em; margin: 10px; cursor:pointer; font-weight:bold;
+        }
+        .upgrade-btn:disabled { background: #888; color: #222; cursor: not-allowed; }
         </style>
         <script>
         let chart;
         let values = [];
         let labels = [];
+        let pm_count = 0;
+        let pm_cost = 15;
         let fakeStocks = [
             {symbol: 'NGU', name: 'NumberGoUp Inc.', price: 1000, change: 0},
             {symbol: 'STKH', name: 'StakeholderMax', price: 420, change: 0},
@@ -56,13 +80,18 @@ def index():
             fakeStocks.forEach(s => {
                 let cls = s.change > 0 ? 'stock-up' : (s.change < 0 ? 'stock-down' : 'stock-neutral');
                 let sign = s.change > 0 ? '+' : '';
-                html += `<span><b>${s.symbol}</b> ${s.price} <span class="${cls}">${sign}${s.change}</span></span>`;
+                html += `<span><b>${s.symbol}</b> ${s.price} <span class=\"${cls}\">${sign}${s.change}</span></span>`;
             });
             document.getElementById('ticker').innerHTML = html;
         }
         function updateValue() {
             fetch('/value').then(r => r.json()).then(data => {
                 document.getElementById('value').innerText = data.value;
+                document.getElementById('pm_count').innerText = data.pm_count;
+                document.getElementById('pm_cost').innerText = data.pm_cost;
+                pm_count = data.pm_count;
+                pm_cost = data.pm_cost;
+                document.getElementById('buy_pm').disabled = (data.value < data.pm_cost);
                 const now = new Date();
                 labels.push(now.toLocaleTimeString());
                 values.push(data.value);
@@ -72,6 +101,11 @@ def index():
                     chart.data.datasets[0].data = values;
                     chart.update();
                 }
+            });
+        }
+        function buyPM() {
+            fetch('/buy_pm', {method:'POST'}).then(r=>r.json()).then(data=>{
+                updateValue();
             });
         }
         window.onload = function() {
@@ -108,15 +142,14 @@ def index():
         <div class="ticker" id="ticker"></div>
         <h1>💸 Number Go Up! 💸</h1>
         <h2>Stakeholder Value: <span id="value">0</span></h2>
+        <div style="margin:20px auto;max-width:500px;">
+            <button class="upgrade-btn" id="buy_pm" onclick="buyPM()">Hire Project Manager<br>(Cost: <span id="pm_cost">15</span>)<br>+0.5 value/tick<br>Owned: <span id="pm_count">0</span></button>
+        </div>
         <canvas id="myChart" width="600" height="250" style="background:#222;border-radius:8px;"></canvas>
         <p style="font-style:italic; color:#FEE715;">Maximize stakeholder value! Infinite growth! 🚀</p>
     </body>
     </html>
     ''')
-
-@app.route('/value')
-def value():
-    return jsonify(value=stakeholder_value['value'])
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=80)
