@@ -4,11 +4,21 @@ import time
 
 app = Flask(__name__)
 
-stakeholder_value = {'value': 0, 'pm_count': 0, 'pm_cost': 15, 'pm_gain': 0.5}
+stakeholder_value = {
+    'value': 0,
+    'pm_count': 0, 'pm_cost': 15, 'pm_gain': 0.5,
+    'consultant_count': 0, 'consultant_cost': 100, 'consultant_gain': 5,
+    'ai_count': 0, 'ai_cost': 1000, 'ai_gain': 50
+}
 
 def number_go_up():
     while True:
-        stakeholder_value['value'] += 1 + stakeholder_value['pm_count'] * stakeholder_value['pm_gain']
+        stakeholder_value['value'] += (
+            1
+            + stakeholder_value['pm_count'] * stakeholder_value['pm_gain']
+            + stakeholder_value['consultant_count'] * stakeholder_value['consultant_gain']
+            + stakeholder_value['ai_count'] * stakeholder_value['ai_gain']
+        )
         time.sleep(1)
 
 # Start background thread to increment value
@@ -22,15 +32,39 @@ def buy_pm():
         stakeholder_value['value'] -= cost
         stakeholder_value['pm_count'] += 1
         stakeholder_value['pm_cost'] = int(15 * (1.15 ** stakeholder_value['pm_count']))
-        return jsonify(success=True, pm_count=stakeholder_value['pm_count'], pm_cost=stakeholder_value['pm_cost'], value=stakeholder_value['value'])
-    return jsonify(success=False, pm_count=stakeholder_value['pm_count'], pm_cost=stakeholder_value['pm_cost'], value=stakeholder_value['value'])
+        return jsonify(success=True)
+    return jsonify(success=False)
+
+@app.route('/buy_consultant', methods=['POST'])
+def buy_consultant():
+    cost = stakeholder_value['consultant_cost']
+    if stakeholder_value['value'] >= cost:
+        stakeholder_value['value'] -= cost
+        stakeholder_value['consultant_count'] += 1
+        stakeholder_value['consultant_cost'] = int(100 * (1.18 ** stakeholder_value['consultant_count']))
+        return jsonify(success=True)
+    return jsonify(success=False)
+
+@app.route('/buy_ai', methods=['POST'])
+def buy_ai():
+    cost = stakeholder_value['ai_cost']
+    if stakeholder_value['value'] >= cost:
+        stakeholder_value['value'] -= cost
+        stakeholder_value['ai_count'] += 1
+        stakeholder_value['ai_cost'] = int(1000 * (1.22 ** stakeholder_value['ai_count']))
+        return jsonify(success=True)
+    return jsonify(success=False)
 
 @app.route('/value')
 def value():
     return jsonify(
         value=round(stakeholder_value['value'],2),
         pm_count=stakeholder_value['pm_count'],
-        pm_cost=stakeholder_value['pm_cost']
+        pm_cost=stakeholder_value['pm_cost'],
+        consultant_count=stakeholder_value['consultant_count'],
+        consultant_cost=stakeholder_value['consultant_cost'],
+        ai_count=stakeholder_value['ai_count'],
+        ai_cost=stakeholder_value['ai_cost']
     )
 
 @app.route('/')
@@ -59,8 +93,38 @@ def index():
         let chart;
         let values = [];
         let labels = [];
-        let pm_count = 0;
-        let pm_cost = 15;
+        function updateValue() {
+            fetch('/value').then(r => r.json()).then(data => {
+                document.getElementById('value').innerText = data.value;
+                document.getElementById('pm_count').innerText = data.pm_count;
+                document.getElementById('pm_cost').innerText = data.pm_cost;
+                document.getElementById('consultant_count').innerText = data.consultant_count;
+                document.getElementById('consultant_cost').innerText = data.consultant_cost;
+                document.getElementById('ai_count').innerText = data.ai_count;
+                document.getElementById('ai_cost').innerText = data.ai_cost;
+                document.getElementById('buy_pm').disabled = (data.value < data.pm_cost);
+                document.getElementById('buy_consultant').disabled = (data.value < data.consultant_cost);
+                document.getElementById('buy_ai').disabled = (data.value < data.ai_cost);
+                const now = new Date();
+                labels.push(now.toLocaleTimeString());
+                values.push(data.value);
+                if (labels.length > 20) { labels.shift(); values.shift(); }
+                if (chart) {
+                    chart.data.labels = labels;
+                    chart.data.datasets[0].data = values;
+                    chart.update();
+                }
+            });
+        }
+        function buyPM() {
+            fetch('/buy_pm', {method:'POST'}).then(()=>updateValue());
+        }
+        function buyConsultant() {
+            fetch('/buy_consultant', {method:'POST'}).then(()=>updateValue());
+        }
+        function buyAI() {
+            fetch('/buy_ai', {method:'POST'}).then(()=>updateValue());
+        }
         let fakeStocks = [
             {symbol: 'NGU', name: 'NumberGoUp Inc.', price: 1000, change: 0},
             {symbol: 'STKH', name: 'StakeholderMax', price: 420, change: 0},
@@ -83,30 +147,6 @@ def index():
                 html += `<span><b>${s.symbol}</b> ${s.price} <span class=\"${cls}\">${sign}${s.change}</span></span>`;
             });
             document.getElementById('ticker').innerHTML = html;
-        }
-        function updateValue() {
-            fetch('/value').then(r => r.json()).then(data => {
-                document.getElementById('value').innerText = data.value;
-                document.getElementById('pm_count').innerText = data.pm_count;
-                document.getElementById('pm_cost').innerText = data.pm_cost;
-                pm_count = data.pm_count;
-                pm_cost = data.pm_cost;
-                document.getElementById('buy_pm').disabled = (data.value < data.pm_cost);
-                const now = new Date();
-                labels.push(now.toLocaleTimeString());
-                values.push(data.value);
-                if (labels.length > 20) { labels.shift(); values.shift(); }
-                if (chart) {
-                    chart.data.labels = labels;
-                    chart.data.datasets[0].data = values;
-                    chart.update();
-                }
-            });
-        }
-        function buyPM() {
-            fetch('/buy_pm', {method:'POST'}).then(r=>r.json()).then(data=>{
-                updateValue();
-            });
         }
         window.onload = function() {
             const ctx = document.getElementById('myChart').getContext('2d');
@@ -144,6 +184,8 @@ def index():
         <h2>Stakeholder Value: <span id="value">0</span></h2>
         <div style="margin:20px auto;max-width:500px;">
             <button class="upgrade-btn" id="buy_pm" onclick="buyPM()">Hire Project Manager<br>(Cost: <span id="pm_cost">15</span>)<br>+0.5 value/tick<br>Owned: <span id="pm_count">0</span></button>
+            <button class="upgrade-btn" id="buy_consultant" onclick="buyConsultant()">Hire Consultant<br>(Cost: <span id="consultant_cost">100</span>)<br>+5 value/tick<br>Owned: <span id="consultant_count">0</span></button>
+            <button class="upgrade-btn" id="buy_ai" onclick="buyAI()">Deploy AI Solution<br>(Cost: <span id="ai_cost">1000</span>)<br>+50 value/tick<br>Owned: <span id="ai_count">0</span></button>
         </div>
         <canvas id="myChart" width="600" height="250" style="background:#222;border-radius:8px;"></canvas>
         <p style="font-style:italic; color:#FEE715;">Maximize stakeholder value! Infinite growth! 🚀</p>
